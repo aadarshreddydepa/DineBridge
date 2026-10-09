@@ -200,16 +200,26 @@ def staff_catalogue(request, outlet_id):
                   iv.id AS variant_id, iv.name AS variant_name,
                   oo.id AS offering_id, oo.price_paise, oo.version,
                   oo.available, oo.active AS offering_active,
-                  oo.estimate_min_minutes, oo.estimate_max_minutes
+                  oo.estimate_min_minutes, oo.estimate_max_minutes,
+                  photo.storage_key AS primary_image_key
            FROM outlet o
            JOIN menu_category c ON c.brand_id = o.brand_id AND c.active
            LEFT JOIN menu_item mi ON mi.category_id = c.id AND mi.active
            LEFT JOIN item_variant iv ON iv.item_id = mi.id AND iv.active
            LEFT JOIN outlet_offering oo ON oo.variant_id = iv.id AND oo.outlet_id = o.id
+           LEFT JOIN LATERAL (
+             SELECT ma.storage_key FROM menu_item_image mii
+             JOIN media_asset ma ON ma.id = mii.asset_id AND ma.status = 'READY'
+             WHERE mii.item_id = mi.id AND mii.active
+             ORDER BY mii.display_order, mii.id LIMIT 1
+           ) photo ON true
            WHERE o.id = %s
            ORDER BY c.display_order, c.name, mi.name, iv.display_order, iv.name""",
         [outlet_id],
     )
+    for row in rows:
+        key = row.pop("primary_image_key")
+        row["primary_image_url"] = catalog._asset_url(key) if key else None
     return Response({"outlet_id": outlet_id, "items": rows})
 
 

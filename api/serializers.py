@@ -121,6 +121,7 @@ class OfferingUpdateInput(serializers.Serializer):
 
 class TableInput(serializers.Serializer):
     label = serializers.CharField(max_length=80)
+    seating_capacity = serializers.IntegerField(min_value=1, max_value=20)
 
 
 class ModifierGroupInput(serializers.Serializer):

@@ -1,5 +1,6 @@
 import hashlib
 import secrets
+import uuid
 
 from django.conf import settings
 from django.db import transaction
@@ -17,6 +18,7 @@ from api.serializers import (BrandUpdateInput, CategoryInput, ItemInput, QuickIt
                              OutletBrandInput, OutletOrderingInput,
                              TableInput, VariantInput)
 from api.services import append_event, audit
+from api.table_qr import table_qr_token, table_qr_url
 
 
 def _brand(brand_id):
@@ -190,6 +192,57 @@ def quick_item_create(request, outlet_id):
     return Response({"item": item, "variant": variant, "offering": offering}, status=201)
 
 
+@api_view(["DELETE"])
+@require_csrf
+def category_delete(request, category_id):
+    category = one("SELECT id, tenant_id, brand_id FROM menu_category WHERE id = %s AND active", [category_id])
+    if not category:
+        raise DomainError("CATEGORY_NOT_FOUND", "Category not found.", 404)
+    user = require_tenant_role(request, category["tenant_id"], {"OWNER", "MANAGER"})
+    with transaction.atomic():
+        one("SELECT id FROM menu_category WHERE id = %s FOR UPDATE", [category_id])
+        if one("SELECT id FROM menu_item WHERE category_id = %s AND active LIMIT 1", [category_id]):
+            raise DomainError("CATEGORY_NOT_EMPTY", "Remove or move its dishes before deleting this category.", 409)
+        execute("UPDATE menu_category SET active = false, updated_at = now() WHERE id = %s", [category_id])
+        _brand_event({"id": category["brand_id"], "tenant_id": category["tenant_id"]}, user["id"],
+                     "catalogue.category_removed", "menu_category", category_id)
+    return Response({"deleted": True, "category_id": category_id})
+
+
+@api_view(["PATCH", "DELETE"])
+@require_csrf
+def item_manage(request, item_id):
+    item = one("SELECT id, tenant_id, brand_id FROM menu_item WHERE id = %s AND active", [item_id])
+    if not item:
+        raise DomainError("ITEM_NOT_FOUND", "Menu item not found.", 404)
+    user = require_tenant_role(request, item["tenant_id"], {"OWNER", "MANAGER"})
+    if request.method == "DELETE":
+        with transaction.atomic():
+            one("SELECT id FROM menu_item WHERE id = %s FOR UPDATE", [item_id])
+            execute("UPDATE menu_item SET active = false, updated_at = now() WHERE id = %s", [item_id])
+            _brand_event({"id": item["brand_id"], "tenant_id": item["tenant_id"]}, user["id"],
+                         "catalogue.item_removed", "menu_item", item_id)
+        return Response({"deleted": True, "item_id": item_id})
+    serializer = ItemInput(data=request.data, partial=True)
+    serializer.is_valid(raise_exception=True)
+    data = serializer.validated_data
+    fields = _changes(data, ("category_id", "name", "description", "dietary_type", "allergens"))
+    if "category_id" in data and not one(
+        "SELECT id FROM menu_category WHERE id = %s AND brand_id = %s AND active",
+        [data["category_id"], item["brand_id"]],
+    ):
+        raise DomainError("INVALID_CATEGORY", "Category does not belong to this restaurant.", 422)
+    with transaction.atomic():
+        one("SELECT id FROM menu_item WHERE id = %s FOR UPDATE", [item_id])
+        assignments = ", ".join(f"{field} = %s" for field in fields)
+        values = [Jsonb(data[field]) if field == "allergens" else data[field] for field in fields]
+        updated = one(f"UPDATE menu_item SET {assignments}, updated_at = now() WHERE id = %s "
+                      "RETURNING id, category_id, name, description, dietary_type", [*values, item_id])
+        _brand_event({"id": item["brand_id"], "tenant_id": item["tenant_id"]}, user["id"],
+                     "catalogue.item_updated", "menu_item", item_id)
+    return Response(updated)
+
+
 @api_view(["POST"])
 @require_csrf
 def variant_create(request, item_id):
@@ -339,31 +392,63 @@ def create_table(request, outlet_id):
     user, _ = require_outlet_role(request, outlet_id, {"OWNER", "MANAGER"})
     serializer = TableInput(data=request.data)
     serializer.is_valid(raise_exception=True)
-    raw = secrets.token_urlsafe(32)
+    table_id = uuid.uuid4()
+    nonce = secrets.token_bytes(32)
+    raw = table_qr_token(table_id, nonce)
     with transaction.atomic():
-        created = one("""INSERT INTO dining_table(tenant_id, outlet_id, label, qr_token_hash)
-                         VALUES (%s, %s, %s, %s) RETURNING id, label""",
-                      [outlet["tenant_id"], outlet_id, serializer.validated_data["label"],
-                       hashlib.sha256(raw.encode()).digest()])
+        created = one("""INSERT INTO dining_table(id, tenant_id, outlet_id, label, seating_capacity, qr_token_hash, qr_nonce)
+                         VALUES (%s, %s, %s, %s, %s, %s, %s) RETURNING id, label, seating_capacity""",
+                      [table_id, outlet["tenant_id"], outlet_id, serializer.validated_data["label"],
+                       serializer.validated_data["seating_capacity"], hashlib.sha256(raw.encode()).digest(), nonce])
         audit(outlet["tenant_id"], outlet_id, user["id"], "table.created", "dining_table", created["id"])
-    qr_base = settings.QR_PUBLIC_BASE_URL or request.build_absolute_uri("/").rstrip("/")
-    return Response({**created, "qr_url": f"{qr_base}/q/{raw}"}, status=201)
+    return Response({**created, "qr_url": table_qr_url(request, raw)}, status=201)
+
+
+@api_view(["GET"])
+def table_current_qr(request, table_id):
+    target = one("SELECT id, outlet_id, label, qr_nonce FROM dining_table WHERE id = %s AND active", [table_id])
+    if not target:
+        raise DomainError("TABLE_NOT_FOUND", "Table not found.", 404)
+    require_outlet_role(request, target["outlet_id"], {"OWNER", "MANAGER"})
+    if target["qr_nonce"] is None:
+        raise DomainError("QR_NOT_RETRIEVABLE", "This table was created before QR viewing was available. Regenerate its QR once, then print the replacement.", 409)
+    raw = table_qr_token(target["id"], target["qr_nonce"])
+    return Response({"table_id": table_id, "label": target["label"], "qr_url": table_qr_url(request, raw)})
 
 
 @api_view(["POST"])
 @require_csrf
 def table_rotate_qr(request, table_id):
-    target = one("SELECT id, tenant_id, outlet_id FROM dining_table WHERE id = %s", [table_id])
+    target = one("SELECT id, tenant_id, outlet_id FROM dining_table WHERE id = %s AND active", [table_id])
     if not target:
         raise DomainError("TABLE_NOT_FOUND", "Table not found.", 404)
     user, _ = require_outlet_role(request, target["outlet_id"], {"OWNER", "MANAGER"})
-    raw = secrets.token_urlsafe(32)
+    nonce = secrets.token_bytes(32)
+    raw = table_qr_token(table_id, nonce)
     with transaction.atomic():
         one("SELECT id FROM dining_table WHERE id = %s FOR UPDATE", [table_id])
-        execute("UPDATE dining_table SET qr_token_hash = %s, qr_rotated_at = now(), updated_at = now() WHERE id = %s",
-                [hashlib.sha256(raw.encode()).digest(), table_id])
+        execute("UPDATE dining_table SET qr_token_hash = %s, qr_nonce = %s, qr_rotated_at = now(), updated_at = now() WHERE id = %s",
+                [hashlib.sha256(raw.encode()).digest(), nonce, table_id])
         execute("UPDATE browser_access SET revoked_at = now() WHERE table_id = %s AND revoked_at IS NULL", [table_id])
         audit(target["tenant_id"], target["outlet_id"], user["id"], "table.qr_rotated", "dining_table", table_id)
         append_event(target["tenant_id"], target["outlet_id"], "table.qr_rotated", {"table_id": str(table_id)})
-    qr_base = settings.QR_PUBLIC_BASE_URL or request.build_absolute_uri("/").rstrip("/")
-    return Response({"table_id": table_id, "qr_url": f"{qr_base}/q/{raw}"})
+    return Response({"table_id": table_id, "qr_url": table_qr_url(request, raw)})
+
+
+@api_view(["DELETE"])
+@require_csrf
+def table_delete(request, table_id):
+    target = one("SELECT id, tenant_id, outlet_id FROM dining_table WHERE id = %s AND active", [table_id])
+    if not target:
+        raise DomainError("TABLE_NOT_FOUND", "Table not found.", 404)
+    user, _ = require_outlet_role(request, target["outlet_id"], {"OWNER", "MANAGER"})
+    with transaction.atomic():
+        one("SELECT id FROM dining_table WHERE id = %s FOR UPDATE", [table_id])
+        active_visit = one("SELECT id FROM dining_visit WHERE table_id = %s AND status IN ('OPEN','CHECKOUT')", [table_id])
+        if active_visit:
+            raise DomainError("TABLE_IN_USE", "Finish the active visit before removing this table.", 409)
+        execute("UPDATE dining_table SET active = false, updated_at = now() WHERE id = %s", [table_id])
+        execute("UPDATE browser_access SET revoked_at = now() WHERE table_id = %s AND revoked_at IS NULL", [table_id])
+        audit(target["tenant_id"], target["outlet_id"], user["id"], "table.removed", "dining_table", table_id)
+        append_event(target["tenant_id"], target["outlet_id"], "table.removed", {"table_id": str(table_id)})
+    return Response({"deleted": True, "table_id": table_id})

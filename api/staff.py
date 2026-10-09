@@ -20,7 +20,7 @@ def tables_snapshot(outlet_id):
                   coalesce((
                     SELECT jsonb_agg(to_jsonb(t) ORDER BY t.label)
                     FROM (
-                      SELECT dt.id, dt.label, dt.active, dv.id AS visit_id, dv.status,
+                      SELECT dt.id, dt.label, dt.seating_capacity, dt.active, dv.id AS visit_id, dv.status,
                              dv.started_at, dv.checkout_at,
                              count(DISTINCT o.id) FILTER (WHERE o.seen_at IS NULL) AS unseen_orders,
                              count(DISTINCT sr.id) FILTER (WHERE sr.status = 'OPEN') AS open_requests
@@ -28,7 +28,7 @@ def tables_snapshot(outlet_id):
                       LEFT JOIN dining_visit dv ON dv.table_id = dt.id AND dv.status IN ('OPEN','CHECKOUT')
                       LEFT JOIN orders o ON o.visit_id = dv.id
                       LEFT JOIN service_request sr ON sr.visit_id = dv.id
-                      WHERE dt.outlet_id = %s GROUP BY dt.id, dv.id
+                      WHERE dt.outlet_id = %s AND dt.active GROUP BY dt.id, dv.id
                     ) t
                   ), '[]'::jsonb) AS tables""",
         [outlet_id, outlet_id],

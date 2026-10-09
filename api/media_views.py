@@ -7,6 +7,7 @@ from pathlib import Path
 from django.conf import settings
 from django.db import transaction
 from PIL import Image, ImageOps, UnidentifiedImageError
+from pillow_heif import register_heif_opener
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 
@@ -18,7 +19,9 @@ from api.db import all_rows, one
 from api.errors import DomainError
 
 
-MAX_UPLOAD_BYTES = 6 * 1024 * 1024
+register_heif_opener(thumbnails=False)
+
+MAX_UPLOAD_BYTES = 12 * 1024 * 1024
 MAX_PIXELS = 20_000_000
 MAX_IMAGES_PER_ITEM = 10
 
@@ -46,13 +49,13 @@ def _images(item_id):
 def _prepare(upload):
     raw = upload.read(MAX_UPLOAD_BYTES + 1)
     if not raw or len(raw) > MAX_UPLOAD_BYTES:
-        raise DomainError("IMAGE_TOO_LARGE", "Each photo must be 6 MB or less.", 422)
+        raise DomainError("IMAGE_TOO_LARGE", "Each photo must be 12 MB or less.", 422)
     try:
         with Image.open(io.BytesIO(raw)) as source:
-            if source.format not in {"JPEG", "PNG", "WEBP"}:
-                raise DomainError("INVALID_IMAGE", "Upload a JPEG, PNG, or WebP photo.", 422)
+            if source.format not in {"JPEG", "PNG", "WEBP", "HEIF"}:
+                raise DomainError("INVALID_IMAGE", "Upload a JPEG, PNG, WebP, or HEIC photo.", 422)
             if source.width * source.height > MAX_PIXELS:
-                raise DomainError("IMAGE_TOO_LARGE", "Photo dimensions are too large.", 422)
+                raise DomainError("IMAGE_TOO_LARGE", "Photo resolution is too large. Choose a smaller image.", 422)
             source.load()
             image = ImageOps.exif_transpose(source).convert("RGB")
             image.thumbnail((1600, 1600), Image.Resampling.LANCZOS)
@@ -60,7 +63,7 @@ def _prepare(upload):
             image.save(output, format="WEBP", quality=82, method=6)
             return output.getvalue(), image.width, image.height
     except (UnidentifiedImageError, OSError, ValueError, Image.DecompressionBombError):
-        raise DomainError("INVALID_IMAGE", "Upload a valid JPEG, PNG, or WebP photo.", 422)
+        raise DomainError("INVALID_IMAGE", "Upload a valid JPEG, PNG, WebP, or HEIC photo.", 422)
 
 
 @api_view(["GET", "POST"])
@@ -87,9 +90,12 @@ def item_images(request, item_id):
             for offset, (content, width, height) in enumerate(prepared, start=1):
                 key = f"uploaded/{item['tenant_id']}/{uuid.uuid4().hex}.webp"
                 path = settings.MEDIA_ROOT / key
-                path.parent.mkdir(parents=True, exist_ok=True)
-                with path.open("xb") as file:
-                    file.write(content)
+                try:
+                    path.parent.mkdir(parents=True, exist_ok=True)
+                    with path.open("xb") as file:
+                        file.write(content)
+                except OSError:
+                    raise DomainError("PHOTO_STORAGE_UNAVAILABLE", "Photo storage is unavailable. Try again shortly.", 503)
                 created_paths.append(path)
                 asset = one(
                     """INSERT INTO media_asset(tenant_id, storage_key, mime_type, width_px, height_px,

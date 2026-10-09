@@ -38,7 +38,9 @@ urlpatterns = [
     path("api/v1/staff/outlets/<uuid:outlet_id>/branding", admin_views.outlet_brand_update),
     path("api/v1/staff/outlets/<uuid:outlet_id>/ordering", admin_views.outlet_ordering_update),
     path("api/v1/staff/brands/<uuid:brand_id>/categories", admin_views.category_create),
+    path("api/v1/staff/categories/<uuid:category_id>", admin_views.category_delete),
     path("api/v1/staff/brands/<uuid:brand_id>/items", admin_views.item_create),
+    path("api/v1/staff/items/<uuid:item_id>", admin_views.item_manage),
     path("api/v1/staff/items/<uuid:item_id>/images", media_views.item_images),
     path("api/v1/staff/items/<uuid:item_id>/images/<uuid:image_id>", media_views.item_image_remove),
     path("api/v1/staff/items/<uuid:item_id>/variants", admin_views.variant_create),
@@ -48,6 +50,8 @@ urlpatterns = [
     path("api/v1/staff/outlets/<uuid:outlet_id>/offerings", admin_views.offering_create),
     path("api/v1/staff/outlets/<uuid:outlet_id>/offerings/<uuid:offering_id>", admin_views.offering_update),
     path("api/v1/staff/tables/<uuid:table_id>/rotate-qr", admin_views.table_rotate_qr),
+    path("api/v1/staff/tables/<uuid:table_id>/qr", admin_views.table_current_qr),
+    path("api/v1/staff/tables/<uuid:table_id>", admin_views.table_delete),
 ]
 
 if settings.DEBUG:

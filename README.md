@@ -26,7 +26,7 @@ For a local demonstration on an **empty** database, run:
 docker compose exec -T api python manage.py seed_local_demo > .local-demo-credentials.json
 ```
 
-The command works only with `DJANGO_DEBUG=1` and returns a generated local owner password and three table QR URLs in the ignored credentials file. Set `ASSET_BASE_URL=https://images.unsplash.com` in local `.env` to display the seed's sample menu photos. The command refuses to run again after the demo tenant exists. For a real tenant, use `bootstrap_tenant` below and enter real menu content in the portal. Owner/manager staff can add categories, dishes, and up to 10 photos per dish (JPEG, PNG or WebP; 6 MB per file). The optional **Polish with AI** button requires `GROQ_API_KEY` in `.env` or `deploy/aws.env`; the key stays on the API server.
+The command works only with `DJANGO_DEBUG=1` and returns a generated local owner password and three table QR URLs in the ignored credentials file. Set `ASSET_BASE_URL=https://images.unsplash.com` in local `.env` to display the seed's sample menu photos. The command refuses to run again after the demo tenant exists. For a real tenant, use `bootstrap_tenant` below and enter real menu content in the portal. Owner/manager staff can add categories, dishes, and up to 10 photos per dish (JPEG, PNG, WebP, or HEIC; 12 MB per file). The optional **Polish with AI** button requires `GROQ_API_KEY` in `.env` or `deploy/aws.env`; the key stays on the API server.
 
 ## Local database
 
@@ -61,7 +61,7 @@ Requires Docker Desktop or another Docker engine with Compose.
    # or: docker compose run --rm api python db/migrate.py
    ```
 
-The migration runner records applied versions in `schema_migration` and skips them on later runs. The schema includes `001_initial`, `002_cancellation_reason`, and `003_menu_item_images`. To rerun the rollback-only database integrity checks:
+The migration runner records applied versions in `schema_migration` and skips them on later runs. The schema includes `001_initial`, `002_cancellation_reason`, `003_menu_item_images`, `004_table_capacity`, and `005_retrievable_table_qr`. New table QRs can be viewed and printed again. Tables created before migration 005 need one QR regeneration because their original token was stored only as a hash. Keep `DJANGO_SECRET_KEY` stable after creating tables; changing it invalidates retrievable QR tokens. To rerun the rollback-only database integrity checks:
 
 ```sh
 docker compose exec -T db sh -c 'psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB"' < db/tests/001_integrity.sql

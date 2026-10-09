@@ -14,7 +14,11 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
     throw new ApiError('NETWORK_ERROR', 'Could not reach the restaurant. Check your connection and try again.', 0)
   }
   const data = await response.json().catch(() => ({}))
-  if (!response.ok) throw new ApiError(data.code || 'REQUEST_FAILED', data.message || 'Something went wrong. Please try again.', response.status)
+  if (!response.ok) {
+    const detail = Object.entries(data).find(([key, value]) => key !== 'code' && key !== 'message' && (typeof value === 'string' || Array.isArray(value)))?.[1]
+    const validation = Array.isArray(detail) ? detail.join(' ') : detail
+    throw new ApiError(data.code || 'REQUEST_FAILED', data.message || validation || (response.status >= 500 ? 'The server could not complete this request. Check the API logs and try again.' : 'Please check the details and try again.'), response.status)
+  }
   return data as T
 }
 

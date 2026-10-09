@@ -8,6 +8,7 @@ import sys
 from tempfile import TemporaryDirectory
 from unittest.mock import patch as mock_patch
 from pathlib import Path
+from urllib.parse import urlsplit
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "dinebridge.settings")
@@ -17,11 +18,13 @@ import django
 django.setup()
 
 from django.contrib.auth.hashers import make_password
+from django.conf import settings
 from django.db import transaction
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import Client
 from django.test.utils import override_settings
 from PIL import Image
+from pillow_heif import register_heif_opener
 
 from api.db import execute, one
 
@@ -42,6 +45,8 @@ def run():
         brand = one("INSERT INTO brand(tenant_id, slug, display_name) VALUES (%s, 'smoke', 'Smoke Kitchen') RETURNING id", [tenant["id"]])
         outlet = one("""INSERT INTO outlet(tenant_id, brand_id, slug, name, ordering_enabled)
                         VALUES (%s, %s, 'one', 'One', true) RETURNING id""", [tenant["id"], brand["id"]])
+        other_outlet = one("""INSERT INTO outlet(tenant_id, brand_id, slug, name, ordering_enabled)
+                              VALUES (%s, %s, 'two', 'Two', true) RETURNING id""", [tenant["id"], brand["id"]])
         category = one("INSERT INTO menu_category(tenant_id, brand_id, name) VALUES (%s, %s, 'Mains') RETURNING id",
                        [tenant["id"], brand["id"]])
         item = one("""INSERT INTO menu_item(tenant_id, brand_id, category_id, name)
@@ -102,7 +107,7 @@ def run():
                      {"email": "smoke@example.invalid", "password": "smoke-password"}, csrf)
         assert login.status_code == 200 and "db_staff" in login.cookies, login.content
         staff_outlets = client.get("/api/v1/staff/outlets")
-        assert staff_outlets.status_code == 200 and len(staff_outlets.json()["outlets"]) == 1, staff_outlets.content
+        assert staff_outlets.status_code == 200 and len(staff_outlets.json()["outlets"]) == 2, staff_outlets.content
         assert staff_outlets.json()["outlets"][0]["can_edit_brand"] is True
         staff_catalogue = client.get(f"/api/v1/staff/outlets/{outlet['id']}/catalogue")
         assert staff_catalogue.status_code == 200 and len(staff_catalogue.json()["items"]) == 1, staff_catalogue.content
@@ -114,7 +119,19 @@ def run():
         assert one("SELECT count(*) AS n FROM outlet_offering WHERE outlet_id = %s", [outlet["id"]])["n"] == 2
         public_menu = client.get(f"/api/v1/outlets/{outlet['id']}/menu").json()
         assert any(dish["name"] == "Fresh Lime Soda" for section in public_menu["categories"] for dish in section["items"])
+        other_menu = client.get(f"/api/v1/outlets/{other_outlet['id']}/menu").json()
+        assert not any(section["items"] for section in other_menu["categories"]), other_menu
+        new_category = post(client, f"/api/v1/staff/brands/{brand['id']}/categories", {"name": "Desserts"}, csrf)
+        assert new_category.status_code == 201, new_category.content
+        refreshed_staff = client.get(f"/api/v1/staff/outlets/{outlet['id']}/catalogue")
+        assert refreshed_staff.status_code == 200, refreshed_staff.content
+        assert any(row["category_name"] == "Desserts" for row in refreshed_staff.json()["items"])
+        removed_category = client.delete(f"/api/v1/staff/categories/{new_category.json()['id']}", HTTP_X_CSRFTOKEN=csrf)
+        assert removed_category.status_code == 200, removed_category.content
+        assert not any(row["category_name"] == "Desserts" for row in client.get(
+            f"/api/v1/staff/outlets/{outlet['id']}/catalogue").json()["items"])
         with TemporaryDirectory() as media_dir, override_settings(MEDIA_ROOT=Path(media_dir)):
+            register_heif_opener(thumbnails=False)
             image_buffer = io.BytesIO()
             Image.new("RGB", (24, 24), "#61a98c").save(image_buffer, format="PNG")
             image_bytes = image_buffer.getvalue()
@@ -124,12 +141,36 @@ def run():
                            SimpleUploadedFile("side.png", image_bytes, content_type="image/png")]
             }, HTTP_X_CSRFTOKEN=csrf)
             assert uploaded.status_code == 201 and len(uploaded.json()["images"]) == 2, uploaded.content
+            photo_catalogue = client.get(f"/api/v1/staff/outlets/{outlet['id']}/catalogue")
+            assert photo_catalogue.status_code == 200, photo_catalogue.content
+            photo_row = next(row for row in photo_catalogue.json()["items"] if row["item_name"] == "Fresh Lime Soda")
+            assert photo_row["primary_image_url"] == uploaded.json()["images"][0]["url"]
             public_menu = client.get(f"/api/v1/outlets/{outlet['id']}/menu").json()
             quick_dish = next(dish for section in public_menu["categories"] for dish in section["items"]
                               if dish["name"] == "Fresh Lime Soda")
             assert len(quick_dish["image_urls"]) == 2 and quick_dish["image_url"].startswith("/uploads/")
             removed = client.delete(f"{image_path}/{uploaded.json()['images'][0]['id']}", HTTP_X_CSRFTOKEN=csrf)
             assert removed.status_code == 200 and len(removed.json()["images"]) == 1, removed.content
+            heic_buffer = io.BytesIO()
+            Image.new("RGB", (24, 24), "#61a98c").save(heic_buffer, format="HEIF")
+            heic_upload = client.post(image_path, {
+                "images": [SimpleUploadedFile("phone.heic", heic_buffer.getvalue(), content_type="image/heic")]
+            }, HTTP_X_CSRFTOKEN=csrf)
+            assert heic_upload.status_code == 201 and len(heic_upload.json()["images"]) == 2, heic_upload.content
+        volume_file = None
+        try:
+            real_upload = client.post(image_path, {
+                "images": [SimpleUploadedFile("volume.png", image_bytes, content_type="image/png")]
+            }, HTTP_X_CSRFTOKEN=csrf)
+            assert real_upload.status_code == 201, real_upload.content
+            volume_url = real_upload.json()["images"][-1]["url"]
+            volume_file = settings.MEDIA_ROOT / volume_url.removeprefix("/uploads/")
+            assert volume_file.is_file() and volume_file.stat().st_size > 0
+            served = client.get(volume_url)
+            assert served.status_code == 200 and served["Content-Type"] == "image/webp"
+        finally:
+            if volume_file:
+                volume_file.unlink(missing_ok=True)
         with override_settings(GROQ_API_KEY=""):
             no_ai = post(client, f"/api/v1/staff/outlets/{outlet['id']}/description-draft",
                          {"title": "Fresh Lime Soda", "draft": "Lime and soda"}, csrf)
@@ -139,8 +180,22 @@ def run():
             drafted = post(client, f"/api/v1/staff/outlets/{outlet['id']}/description-draft",
                            {"title": "Fresh Lime Soda", "draft": "Lime and soda"}, csrf)
             assert drafted.status_code == 200 and drafted.json()["description"].startswith("Fresh lime"), drafted.content
-        new_table = post(client, f"/api/v1/staff/outlets/{outlet['id']}/tables", {"label": "T2"}, csrf)
+        new_table = post(client, f"/api/v1/staff/outlets/{outlet['id']}/tables",
+                         {"label": "T2", "seating_capacity": 6}, csrf)
         assert new_table.status_code == 201 and "/q/" in new_table.json()["qr_url"], new_table.content
+        assert new_table.json()["seating_capacity"] == 6
+        current_qr = client.get(f"/api/v1/staff/tables/{new_table.json()['id']}/qr")
+        assert current_qr.status_code == 200 and current_qr.json()["qr_url"] == new_table.json()["qr_url"], current_qr.content
+        new_qr_path = urlsplit(new_table.json()["qr_url"]).path
+        assert client.get(new_qr_path).status_code == 302
+        assert any(row["label"] == "T2" and row["seating_capacity"] == 6 for row in client.get(
+            f"/api/v1/staff/outlets/{outlet['id']}/tables").json()["tables"])
+        removed_table = client.delete(f"/api/v1/staff/tables/{new_table.json()['id']}", HTTP_X_CSRFTOKEN=csrf)
+        assert removed_table.status_code == 200, removed_table.content
+        assert client.get(new_qr_path).status_code == 404
+        assert client.get(f"/q/{qr_raw}").status_code == 302
+        assert not any(row["label"] == "T2" for row in client.get(
+            f"/api/v1/staff/outlets/{outlet['id']}/tables").json()["tables"])
         group = post(client, f"/api/v1/staff/variants/{variant['id']}/modifier-groups",
                      {"name": "Extras", "min_choices": 0, "max_choices": 1}, csrf)
         assert group.status_code == 201, group.content
@@ -196,7 +251,19 @@ def run():
         assert stale_price.status_code == 409 and stale_price.json()["code"] == "PRICE_CHANGED", stale_price.content
         rotated = post(client, f"/api/v1/staff/tables/{table['id']}/rotate-qr", {}, csrf)
         assert rotated.status_code == 200 and "/q/" in rotated.json()["qr_url"], rotated.content
+        assert client.get(f"/api/v1/staff/tables/{table['id']}/qr").json()["qr_url"] == rotated.json()["qr_url"]
         assert client.get(f"/q/{qr_raw}").status_code == 404
+
+        quick_id = quick_item.json()["item"]["id"]
+        edited_item = patch(client, f"/api/v1/staff/items/{quick_id}",
+                            {"name": "Citrus Soda", "description": "Fresh lime and soda."}, csrf)
+        assert edited_item.status_code == 200 and edited_item.json()["name"] == "Citrus Soda", edited_item.content
+        assert any(dish["name"] == "Citrus Soda" for section in client.get(
+            f"/api/v1/outlets/{outlet['id']}/menu").json()["categories"] for dish in section["items"])
+        removed_item = client.delete(f"/api/v1/staff/items/{quick_id}", HTTP_X_CSRFTOKEN=csrf)
+        assert removed_item.status_code == 200, removed_item.content
+        assert not any(dish["name"] == "Citrus Soda" for section in client.get(
+            f"/api/v1/outlets/{outlet['id']}/menu").json()["categories"] for dish in section["items"])
 
         transaction.set_rollback(True)
     stream.close()
