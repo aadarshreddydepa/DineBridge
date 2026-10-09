@@ -1,6 +1,6 @@
 # DineBridge
 
-Phase 1 provides a local PostgreSQL environment and the initial database schema for the restaurant ordering system. The backend API and portal are not in this repository yet.
+The repository contains the PostgreSQL schema and the first Django REST API slice for the restaurant ordering system. The React portals are not built yet.
 
 ## Local database
 
@@ -12,10 +12,13 @@ Requires Docker Desktop or another Docker engine with Compose.
    cp .env.example .env
    ```
 
-2. Start PostgreSQL:
+2. Start PostgreSQL, apply migrations, and start the API:
 
    ```sh
    docker compose up -d db
+   docker compose build api
+   docker compose run --rm api python db/migrate.py
+   docker compose up -d api
    docker compose ps
    ```
 
@@ -25,10 +28,11 @@ Requires Docker Desktop or another Docker engine with Compose.
    docker compose exec db sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB"'
    ```
 
-4. Apply any pending schema migrations:
+4. Apply any pending schema migrations from the host or API container:
 
    ```sh
-   python3 db/migrate.py
+   .venv/bin/python db/migrate.py
+   # or: docker compose run --rm api python db/migrate.py
    ```
 
 The migration runner records applied versions in `schema_migration` and skips them on later runs. The current database has migrations `001_initial` and `002_cancellation_reason` applied. To rerun the rollback-only database integrity checks:
@@ -38,6 +42,27 @@ docker compose exec -T db sh -c 'psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d 
 ```
 
 The schema and its key constraints are described in [docs/schema.md](docs/schema.md).
+
+The API health check is [http://127.0.0.1:8000/healthz](http://127.0.0.1:8000/healthz). API routes, cookies, roles, and the next work items are in [docs/api.md](docs/api.md). To run the rollback-only API flow test from the host:
+
+```sh
+uv sync
+.venv/bin/python db/tests/smoke_api.py
+```
+
+The separate `db/tests/concurrency_api.py` check runs only against a disposable database whose name ends in `_concurrency_test`.
+
+Create the first tenant and owner interactively after migrations:
+
+```sh
+docker compose exec api python manage.py bootstrap_tenant \
+  --tenant-slug example-client --legal-name "Example Client" \
+  --brand-slug example-brand --brand-name "Example Kitchen" \
+  --outlet-slug main --outlet-name "Main Outlet" \
+  --owner-email owner@example.com
+```
+
+This command prompts for an owner password. It does not seed a restaurant automatically.
 
 The database listens only on `127.0.0.1` at `POSTGRES_PORT` (default `5432`). On the current development machine, `.env` uses **55432** because another local PostgreSQL server already uses 5432. A future Django backend running on the host can use `postgresql://dinebridge:<password>@127.0.0.1:55432/dinebridge` on this machine. A backend container on the same Compose network will use hostname `db` and port `5432` instead. URL-encode special characters in the password when constructing a connection URL.
 
