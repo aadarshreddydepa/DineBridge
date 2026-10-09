@@ -27,7 +27,7 @@ services:
     environment:
       DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY:?Set DJANGO_SECRET_KEY in deploy/aws.env}
       DJANGO_DEBUG: "0"
-      DJANGO_ALLOWED_HOSTS: ${APP_DOMAIN:?Set APP_DOMAIN in deploy/aws.env}
+      DJANGO_ALLOWED_HOSTS: ${APP_DOMAIN:?Set APP_DOMAIN in deploy/aws.env},127.0.0.1,localhost
       FRONTEND_URL: https://${APP_DOMAIN}
       QR_PUBLIC_BASE_URL: https://${APP_DOMAIN}
       CSRF_TRUSTED_ORIGINS: https://${APP_DOMAIN}
