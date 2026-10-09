@@ -1,9 +1,12 @@
 """Rollback-only end-to-end API smoke test against the local PostgreSQL service."""
 
 import hashlib
+import io
 import json
 import os
 import sys
+from tempfile import TemporaryDirectory
+from unittest.mock import patch as mock_patch
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
@@ -15,7 +18,10 @@ django.setup()
 
 from django.contrib.auth.hashers import make_password
 from django.db import transaction
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import Client
+from django.test.utils import override_settings
+from PIL import Image
 
 from api.db import execute, one
 
@@ -106,6 +112,33 @@ def run():
                            "estimate_max_minutes": 10}, csrf)
         assert quick_item.status_code == 201, quick_item.content
         assert one("SELECT count(*) AS n FROM outlet_offering WHERE outlet_id = %s", [outlet["id"]])["n"] == 2
+        public_menu = client.get(f"/api/v1/outlets/{outlet['id']}/menu").json()
+        assert any(dish["name"] == "Fresh Lime Soda" for section in public_menu["categories"] for dish in section["items"])
+        with TemporaryDirectory() as media_dir, override_settings(MEDIA_ROOT=Path(media_dir)):
+            image_buffer = io.BytesIO()
+            Image.new("RGB", (24, 24), "#61a98c").save(image_buffer, format="PNG")
+            image_bytes = image_buffer.getvalue()
+            image_path = f"/api/v1/staff/items/{quick_item.json()['item']['id']}/images"
+            uploaded = client.post(image_path, {
+                "images": [SimpleUploadedFile("front.png", image_bytes, content_type="image/png"),
+                           SimpleUploadedFile("side.png", image_bytes, content_type="image/png")]
+            }, HTTP_X_CSRFTOKEN=csrf)
+            assert uploaded.status_code == 201 and len(uploaded.json()["images"]) == 2, uploaded.content
+            public_menu = client.get(f"/api/v1/outlets/{outlet['id']}/menu").json()
+            quick_dish = next(dish for section in public_menu["categories"] for dish in section["items"]
+                              if dish["name"] == "Fresh Lime Soda")
+            assert len(quick_dish["image_urls"]) == 2 and quick_dish["image_url"].startswith("/uploads/")
+            removed = client.delete(f"{image_path}/{uploaded.json()['images'][0]['id']}", HTTP_X_CSRFTOKEN=csrf)
+            assert removed.status_code == 200 and len(removed.json()["images"]) == 1, removed.content
+        with override_settings(OPENAI_API_KEY=""):
+            no_ai = post(client, f"/api/v1/staff/outlets/{outlet['id']}/description-draft",
+                         {"title": "Fresh Lime Soda", "draft": "Lime and soda"}, csrf)
+            assert no_ai.status_code == 503 and no_ai.json()["code"] == "AI_NOT_CONFIGURED", no_ai.content
+        fake_ai = {"output": [{"type": "message", "content": [{"type": "output_text", "text": "Fresh lime soda with a bright citrus finish."}]}]}
+        with override_settings(OPENAI_API_KEY="test"), mock_patch("api.ai_views.urlopen", return_value=io.BytesIO(json.dumps(fake_ai).encode())):
+            drafted = post(client, f"/api/v1/staff/outlets/{outlet['id']}/description-draft",
+                           {"title": "Fresh Lime Soda", "draft": "Lime and soda"}, csrf)
+            assert drafted.status_code == 200 and drafted.json()["description"].startswith("Fresh lime"), drafted.content
         new_table = post(client, f"/api/v1/staff/outlets/{outlet['id']}/tables", {"label": "T2"}, csrf)
         assert new_table.status_code == 201 and "/q/" in new_table.json()["qr_url"], new_table.content
         group = post(client, f"/api/v1/staff/variants/{variant['id']}/modifier-groups",

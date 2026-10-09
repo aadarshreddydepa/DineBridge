@@ -3,6 +3,7 @@ import { ArrowLeft, ArrowRight, Check, Clock3, Coffee, Flame, Heart, Leaf, MapPi
 import { api, ApiError } from './api'
 import { demoConfig, demoMenu } from './demo'
 import type { CartLine, Config, Menu, MenuItem, ModifierGroup, Order, Variant } from './types'
+import './gallery.css'
 
 const params = new URLSearchParams(window.location.search)
 const outletId = params.get('outlet') || ''
@@ -50,15 +51,17 @@ function Intro({ name, onClose }: { name: string; onClose: () => void }) {
   </div>
 }
 
-function FoodImage({ item, className = '' }: { item: MenuItem; className?: string }) {
+function FoodImage({ item, className = '', url }: { item: MenuItem; className?: string; url?: string | null }) {
   const [failed, setFailed] = useState(false)
-  return item.image_url && !failed
-    ? <img className={className} src={item.image_url} alt={item.name} loading="lazy" onError={() => setFailed(true)} />
+  const source = url === undefined ? item.image_url : url
+  return source && !failed
+    ? <img className={className} src={source} alt={item.name} loading="lazy" onError={() => setFailed(true)} />
     : <div className={`image-fallback ${className}`} aria-label={item.name}><UtensilsCrossed size={33} strokeWidth={1.2} /></div>
 }
 
 function ItemSheet({ item, currency, onClose, onAdd }: { item: MenuItem; currency: string; onClose: () => void; onAdd: (item: MenuItem, variant: Variant, options: string[], notes: string, quantity: number) => void }) {
   const [variant, setVariant] = useState(item.variants[0])
+  const [photoIndex, setPhotoIndex] = useState(0)
   const [options, setOptions] = useState<string[]>([])
   const [notes, setNotes] = useState('')
   const [quantity, setQuantity] = useState(1)
@@ -77,7 +80,8 @@ function ItemSheet({ item, currency, onClose, onAdd }: { item: MenuItem; currenc
     <section className="sheet item-sheet" role="dialog" aria-modal="true" aria-label={item.name}>
       <div className="sheet-handle" />
       <button className="sheet-close" onClick={onClose} aria-label="Close item"><X size={20} /></button>
-      <div className="detail-image-wrap"><FoodImage item={item} className="detail-image" /></div>
+      <div className="detail-image-wrap"><FoodImage key={(item.image_urls || [item.image_url])[photoIndex] || 'fallback'} item={item} url={(item.image_urls || [item.image_url])[photoIndex]} className="detail-image" /></div>
+      {(item.image_urls?.length || 0) > 1 && <div className="detail-photo-strip" aria-label="Dish photos">{item.image_urls!.map((url, index) => <button key={url} className={photoIndex === index ? 'selected' : ''} onClick={() => setPhotoIndex(index)} aria-label={`Show photo ${index + 1}`}><img src={url} alt="" /></button>)}</div>}
       <div className="sheet-body">
         <div className="detail-topline"><span className="eyebrow">MADE FOR YOU</span><span className="dietary-detail"><span className={`diet-dot ${item.dietary_type.toLowerCase()}`} />{dietaryLabel(item.dietary_type)}</span></div>
         <h2>{item.name}</h2>
@@ -137,6 +141,18 @@ export default function App() {
     }).catch((error: Error) => { if (live) { setLoadError(error.message); setLoading(false) } })
     api.access().then(access => { if (live && access.outlet_id === outletId) { setHasAccess(true); setTableLabel(access.table_label) } }).catch(() => {})
     return () => { live = false }
+  }, [])
+
+  useEffect(() => {
+    if (demo || !outletId) return
+    const refreshMenu = () => {
+      if (document.hidden) return
+      api.menu(outletId).then(setMenu).catch(() => {})
+    }
+    const onVisible = () => { if (!document.hidden) refreshMenu() }
+    const timer = window.setInterval(refreshMenu, 30000)
+    document.addEventListener('visibilitychange', onVisible)
+    return () => { window.clearInterval(timer); document.removeEventListener('visibilitychange', onVisible) }
   }, [])
 
   useEffect(() => {
@@ -227,7 +243,7 @@ export default function App() {
     catch (error) { setServiceMessage((error as Error).message) }
   }
 
-  const filtered = useMemo(() => (menu?.categories || []).map(group => ({ ...group, items: group.items.filter(item => (category === 'all' || category === group.id) && (diet === 'veg' ? item.dietary_type === 'VEGETARIAN' || item.dietary_type === 'VEGAN' : item.dietary_type === 'NON_VEGETARIAN') && `${item.name} ${item.description}`.toLowerCase().includes(search.toLowerCase().trim())) })).filter(group => group.items.length), [menu, category, diet, search])
+  const filtered = useMemo(() => (menu?.categories || []).map(group => ({ ...group, items: group.items.filter(item => (category === 'all' || category === group.id) && (item.dietary_type === 'UNSPECIFIED' || (diet === 'veg' ? item.dietary_type === 'VEGETARIAN' || item.dietary_type === 'VEGAN' : item.dietary_type === 'NON_VEGETARIAN')) && `${item.name} ${item.description}`.toLowerCase().includes(search.toLowerCase().trim())) })).filter(group => group.items.length), [menu, category, diet, search])
   const cartCount = cart.reduce((sum, line) => sum + line.quantity, 0)
   const subtotal = cart.reduce((sum, line) => sum + line.unitPrice * line.quantity, 0)
   const theme = { '--brand': config?.primary_color || '#263b32', '--accent': config?.accent_color || '#d97a55' } as CSSProperties

@@ -13,6 +13,7 @@ dependencies = [
   "gunicorn>=23,<25",
   "uvicorn>=0.35,<1",
   "uvicorn-worker>=0.4,<1",
+  "pillow>=11,<13",
 ]
 
 [dependency-groups]

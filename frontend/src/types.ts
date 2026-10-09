@@ -30,6 +30,7 @@ export interface MenuItem {
   dietary_type: DietaryType
   allergens: string[]
   image_url: string | null
+  image_urls?: string[]
   variants: Variant[]
 }
 export interface Category {

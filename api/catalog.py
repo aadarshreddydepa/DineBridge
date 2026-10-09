@@ -7,6 +7,8 @@ from api.errors import DomainError
 
 
 def _asset_url(key):
+    if key and key.startswith("uploaded/"):
+        return f"/uploads/{quote(key, safe='/')}"
     base = getattr(settings, "ASSET_BASE_URL", "")
     return f"{base.rstrip('/')}/{quote(key, safe='/')}" if base and key else None
 
@@ -68,6 +70,17 @@ def outlet_menu(outlet_id):
         [outlet_id],
     )
     variants = [row["variant_id"] for row in rows]
+    item_ids = list({row["item_id"] for row in rows})
+    image_rows = all_rows(
+        """SELECT mii.item_id, ma.storage_key
+           FROM menu_item_image mii JOIN media_asset ma ON ma.id = mii.asset_id
+           WHERE mii.item_id = ANY(%s) AND mii.active AND ma.status = 'READY'
+           ORDER BY mii.item_id, mii.display_order, mii.id""",
+        [item_ids],
+    ) if item_ids else []
+    images_by_item = {}
+    for image in image_rows:
+        images_by_item.setdefault(image["item_id"], []).append(_asset_url(image["storage_key"]))
     modifiers = all_rows(
         """SELECT mg.variant_id, mg.id AS group_id, mg.name AS group_name,
                   mg.min_choices, mg.max_choices, mg.display_order,
@@ -101,11 +114,13 @@ def outlet_menu(outlet_id):
             "translations": row["category_translations"], "items": [],
         })
         if row["item_id"] not in items:
+            image_urls = images_by_item.get(row["item_id"]) or ([_asset_url(row["image_key"])] if row["image_key"] else [])
             item = {
                 "id": row["item_id"], "name": row["item_name"],
                 "description": row["description"], "translations": row["item_translations"],
                 "dietary_type": row["dietary_type"], "allergens": row["allergens"],
-                "image_url": _asset_url(row["image_key"]), "variants": [],
+                "image_url": image_urls[0] if image_urls else None,
+                "image_urls": image_urls, "variants": [],
             }
             items[row["item_id"]] = item
             category["items"].append(item)

@@ -15,6 +15,7 @@ COPY --chown=app:app api /app/api
 COPY --chown=app:app dinebridge /app/dinebridge
 COPY --chown=app:app db/migrations /app/db/migrations
 COPY --chown=app:app db/migrate.py /app/db/migrate.py
+RUN mkdir -p /app/uploads && chown app:app /app/uploads
 
 USER app
 EXPOSE 8000

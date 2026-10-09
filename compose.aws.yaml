@@ -34,12 +34,17 @@ services:
       CORS_ALLOWED_ORIGINS: https://${APP_DOMAIN}
       COOKIE_SAMESITE: Lax
       ASSET_BASE_URL: ${ASSET_BASE_URL:-}
+      MEDIA_ROOT: /app/uploads
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_MODEL: ${OPENAI_MODEL:-gpt-6-luna}
       POSTGRES_DB: dinebridge
       POSTGRES_USER: dinebridge
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_HOST: db
       POSTGRES_PORT: "5432"
       PORT: "8000"
+    volumes:
+      - media_data:/app/uploads
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/healthz', timeout=3)"]
       interval: 10s
@@ -64,8 +69,10 @@ services:
     volumes:
       - caddy_data:/data
       - caddy_config:/config
+      - media_data:/srv/uploads:ro
 
 volumes:
   postgres_data:
   caddy_data:
   caddy_config:
+  media_data:

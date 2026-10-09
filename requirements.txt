@@ -26,6 +26,8 @@ h11==0.16.0
     # via uvicorn
 packaging==26.3
     # via gunicorn
+pillow==12.3.0
+    # via dinebridge-api
 psycopg==3.3.6
     # via dinebridge-api
 psycopg-binary==3.3.6 ; implementation_name != 'pypy'

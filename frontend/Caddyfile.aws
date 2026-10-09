@@ -13,6 +13,11 @@
         reverse_proxy api:8000
     }
 
+    handle /uploads/* {
+        root * /srv
+        file_server
+    }
+
     handle {
         root * /srv
         try_files {path} /index.html

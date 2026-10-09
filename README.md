@@ -26,7 +26,7 @@ For a local demonstration on an **empty** database, run:
 docker compose exec -T api python manage.py seed_local_demo > .local-demo-credentials.json
 ```
 
-The command works only with `DJANGO_DEBUG=1` and returns a generated local owner password and three table QR URLs in the ignored credentials file. Set `ASSET_BASE_URL=https://images.unsplash.com` in local `.env` to display the seed's sample menu photos. The command refuses to run again after the demo tenant exists. For a real tenant, use `bootstrap_tenant` below and enter real menu content in the portal.
+The command works only with `DJANGO_DEBUG=1` and returns a generated local owner password and three table QR URLs in the ignored credentials file. Set `ASSET_BASE_URL=https://images.unsplash.com` in local `.env` to display the seed's sample menu photos. The command refuses to run again after the demo tenant exists. For a real tenant, use `bootstrap_tenant` below and enter real menu content in the portal. Owner/manager staff can add categories, dishes, and up to 10 photos per dish (JPEG, PNG or WebP; 6 MB per file). The optional **Polish with AI** button requires `OPENAI_API_KEY` in `.env` or `deploy/aws.env`; the key stays on the API server.
 
 ## Local database
 
@@ -61,7 +61,7 @@ Requires Docker Desktop or another Docker engine with Compose.
    # or: docker compose run --rm api python db/migrate.py
    ```
 
-The migration runner records applied versions in `schema_migration` and skips them on later runs. The current database has migrations `001_initial` and `002_cancellation_reason` applied. To rerun the rollback-only database integrity checks:
+The migration runner records applied versions in `schema_migration` and skips them on later runs. The schema includes `001_initial`, `002_cancellation_reason`, and `003_menu_item_images`. To rerun the rollback-only database integrity checks:
 
 ```sh
 docker compose exec -T db sh -c 'psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB"' < db/tests/001_integrity.sql
@@ -92,7 +92,7 @@ This command prompts for an owner password. It does not seed a restaurant automa
 
 The database listens only on `127.0.0.1` at `POSTGRES_PORT` (default `5432`). On the current development machine, `.env` uses **55432** because another local PostgreSQL server already uses 5432. A future Django backend running on the host can use `postgresql://dinebridge:<password>@127.0.0.1:55432/dinebridge` on this machine. A backend container on the same Compose network will use hostname `db` and port `5432` instead. URL-encode special characters in the password when constructing a connection URL.
 
-The named Docker volume preserves data across `docker compose down` and container recreation. `docker compose down --volumes` deletes the local database. The PostgreSQL 18 image stores its data under `/var/lib/postgresql/18/docker`, so the volume is mounted at `/var/lib/postgresql`.
+Named Docker volumes preserve database data and uploaded menu photos across `docker compose down` and container recreation. `docker compose down --volumes` deletes both. The PostgreSQL 18 image stores its data under `/var/lib/postgresql/18/docker`, so the volume is mounted at `/var/lib/postgresql`.
 
 Configuration and deployment choices are in [docs/deployment.md](docs/deployment.md).
 

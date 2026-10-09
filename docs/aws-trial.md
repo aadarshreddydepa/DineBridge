@@ -113,8 +113,21 @@ sudo docker compose --env-file deploy/aws.env -f compose.aws.yaml exec api \
 
 Sign in at `/staff`. Add a category and dish under **Menu**, enable **Accept new orders** under **Settings**, and add a table under **Tables**. Print or save its QR before closing the dialog. Scan that QR on a phone, place an order, and verify it appears in **Kitchen**. The local demo credentials are not copied to AWS and will not work there.
 
+To enable **Polish with AI**, add an `OPENAI_API_KEY=...` line to the private `deploy/aws.env` on EC2, then recreate the API container. This is optional and uses your own OpenAI API account. Keep the key out of Git.
+
 ## 6. Operate or stop the trial
 
-From `~/dinebridge` on EC2, inspect logs with `sudo docker compose --env-file deploy/aws.env -f compose.aws.yaml logs --tail=100 api web`. To deploy code changes, commit and push on your Mac, then run `git pull --ff-only origin main` on EC2 followed by `sudo docker compose --env-file deploy/aws.env -f compose.aws.yaml up -d --build api web`. For a private repository, prefix `git pull` with the same `GIT_SSH_COMMAND` used for cloning. Apply any new database migrations before using the updated API.
+From `~/dinebridge` on EC2, inspect logs with `sudo docker compose --env-file deploy/aws.env -f compose.aws.yaml logs --tail=100 api web`. To deploy code changes, commit and push on your Mac, then run these commands on EC2. For a private repository, prefix `git pull` with the same `GIT_SSH_COMMAND` used for cloning. Run migrations from the newly built image before starting the updated API:
+
+```sh
+cd ~/dinebridge
+git pull --ff-only origin main
+sudo docker compose --env-file deploy/aws.env -f compose.aws.yaml build api web
+sudo docker compose --env-file deploy/aws.env -f compose.aws.yaml run --rm api python db/migrate.py
+sudo docker compose --env-file deploy/aws.env -f compose.aws.yaml up -d api web
+sudo docker compose --env-file deploy/aws.env -f compose.aws.yaml ps
+```
+
+The `media_data` volume holds uploaded menu photos and survives container recreation. Include it alongside PostgreSQL in your backups; `docker compose down --volumes` deletes both volumes.
 
 Before stopping or terminating the instance, export the database to a separate safe location. EC2 termination removes the instance; an EBS root volume can also be deleted according to its delete-on-termination setting. Stop/termination and the associated disk, public IP, and Elastic IP have different billing behavior. Review the EC2 and Billing consoles when you finish the trial. This single-node setup does not include automated backup, monitoring, or high availability.

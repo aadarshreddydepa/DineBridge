@@ -39,4 +39,12 @@ export const api = {
   },
   post: <T>(path: string, body: unknown, idempotencyKey?: string) => api.mutate<T>('POST', path, body, idempotencyKey),
   patch: <T>(path: string, body: unknown) => api.mutate<T>('PATCH', path, body),
+  async upload<T>(path: string, body: FormData): Promise<T> {
+    const { csrf_token } = await request<{ csrf_token: string }>('/api/v1/csrf')
+    return request<T>(path, { method: 'POST', headers: { 'X-CSRFToken': csrf_token }, body })
+  },
+  async delete<T>(path: string): Promise<T> {
+    const { csrf_token } = await request<{ csrf_token: string }>('/api/v1/csrf')
+    return request<T>(path, { method: 'DELETE', headers: { 'X-CSRFToken': csrf_token } })
+  },
 }

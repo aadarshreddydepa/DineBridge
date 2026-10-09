@@ -1,6 +1,8 @@
+from django.conf import settings
+from django.conf.urls.static import static
 from django.urls import path
 
-from api import admin_views, views
+from api import admin_views, ai_views, media_views, views
 
 
 urlpatterns = [
@@ -19,6 +21,7 @@ urlpatterns = [
     path("api/v1/staff/outlets", views.staff_outlets),
     path("api/v1/staff/outlets/<uuid:outlet_id>/tables", views.staff_tables),
     path("api/v1/staff/outlets/<uuid:outlet_id>/catalogue", views.staff_catalogue),
+    path("api/v1/staff/outlets/<uuid:outlet_id>/description-draft", ai_views.description_draft),
     path("api/v1/staff/outlets/<uuid:outlet_id>/quick-items", admin_views.quick_item_create),
     path("api/v1/staff/outlets/<uuid:outlet_id>/queue", views.staff_queue),
     path("api/v1/staff/outlets/<uuid:outlet_id>/service-requests", views.staff_requests),
@@ -36,6 +39,8 @@ urlpatterns = [
     path("api/v1/staff/outlets/<uuid:outlet_id>/ordering", admin_views.outlet_ordering_update),
     path("api/v1/staff/brands/<uuid:brand_id>/categories", admin_views.category_create),
     path("api/v1/staff/brands/<uuid:brand_id>/items", admin_views.item_create),
+    path("api/v1/staff/items/<uuid:item_id>/images", media_views.item_images),
+    path("api/v1/staff/items/<uuid:item_id>/images/<uuid:image_id>", media_views.item_image_remove),
     path("api/v1/staff/items/<uuid:item_id>/variants", admin_views.variant_create),
     path("api/v1/staff/variants/<uuid:variant_id>/modifier-groups", admin_views.modifier_group_create),
     path("api/v1/staff/modifier-groups/<uuid:group_id>/options", admin_views.modifier_option_create),
@@ -44,3 +49,6 @@ urlpatterns = [
     path("api/v1/staff/outlets/<uuid:outlet_id>/offerings/<uuid:offering_id>", admin_views.offering_update),
     path("api/v1/staff/tables/<uuid:table_id>/rotate-qr", admin_views.table_rotate_qr),
 ]
+
+if settings.DEBUG:
+    urlpatterns += static("/uploads/", document_root=settings.MEDIA_ROOT)
