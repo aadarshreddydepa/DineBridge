@@ -130,12 +130,12 @@ def run():
             assert len(quick_dish["image_urls"]) == 2 and quick_dish["image_url"].startswith("/uploads/")
             removed = client.delete(f"{image_path}/{uploaded.json()['images'][0]['id']}", HTTP_X_CSRFTOKEN=csrf)
             assert removed.status_code == 200 and len(removed.json()["images"]) == 1, removed.content
-        with override_settings(OPENAI_API_KEY=""):
+        with override_settings(GROQ_API_KEY=""):
             no_ai = post(client, f"/api/v1/staff/outlets/{outlet['id']}/description-draft",
                          {"title": "Fresh Lime Soda", "draft": "Lime and soda"}, csrf)
             assert no_ai.status_code == 503 and no_ai.json()["code"] == "AI_NOT_CONFIGURED", no_ai.content
-        fake_ai = {"output": [{"type": "message", "content": [{"type": "output_text", "text": "Fresh lime soda with a bright citrus finish."}]}]}
-        with override_settings(OPENAI_API_KEY="test"), mock_patch("api.ai_views.urlopen", return_value=io.BytesIO(json.dumps(fake_ai).encode())):
+        fake_ai = {"choices": [{"message": {"content": "Fresh lime soda with a bright citrus finish."}}]}
+        with override_settings(GROQ_API_KEY="test"), mock_patch("api.ai_views.urlopen", return_value=io.BytesIO(json.dumps(fake_ai).encode())):
             drafted = post(client, f"/api/v1/staff/outlets/{outlet['id']}/description-draft",
                            {"title": "Fresh Lime Soda", "draft": "Lime and soda"}, csrf)
             assert drafted.status_code == 200 and drafted.json()["description"].startswith("Fresh lime"), drafted.content

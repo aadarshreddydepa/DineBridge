@@ -1,4 +1,4 @@
-"""Optional, staff-only description drafting via the OpenAI Responses API."""
+"""Optional, staff-only description drafting via Groq Chat Completions."""
 
 import json
 from urllib.error import HTTPError, URLError
@@ -21,13 +21,8 @@ class DescriptionDraftInput(serializers.Serializer):
 
 
 def _response_text(payload):
-    return "".join(
-        content.get("text", "")
-        for item in payload.get("output", [])
-        if item.get("type") == "message"
-        for content in item.get("content", [])
-        if content.get("type") == "output_text"
-    ).strip()
+    choices = payload.get("choices") or []
+    return (choices[0].get("message", {}).get("content") or "").strip() if choices else ""
 
 
 @api_view(["POST"])
@@ -39,26 +34,27 @@ def description_draft(request, outlet_id):
     require_tenant_role(request, outlet["tenant_id"], {"OWNER", "MANAGER"})
     serializer = DescriptionDraftInput(data=request.data)
     serializer.is_valid(raise_exception=True)
-    if not settings.OPENAI_API_KEY:
+    if not settings.GROQ_API_KEY:
         raise DomainError("AI_NOT_CONFIGURED", "AI suggestions are not configured for this server.", 503)
     data = serializer.validated_data
     body = {
-        "model": settings.OPENAI_MODEL,
-        "store": False,
-        "reasoning": {"effort": "none"},
-        "max_output_tokens": 160,
-        "instructions": (
-            "Write one polished restaurant-menu description, 15 to 35 words. "
-            "Use only facts provided by the staff member. Do not invent ingredients, "
-            "allergens, health claims, cooking methods, or dietary claims. "
-            "If details are sparse, stay concise. Return only the description."
-        ),
-        "input": f"Dish title: {data['title']}\nStaff draft: {data['draft']}",
+        "model": settings.GROQ_MODEL,
+        "max_completion_tokens": 160,
+        "reasoning_effort": "none",
+        "messages": [
+            {"role": "system", "content": (
+                "Write one polished restaurant-menu description, 15 to 35 words. "
+                "Use only facts provided by the staff member. Do not invent ingredients, "
+                "allergens, health claims, cooking methods, or dietary claims. "
+                "If details are sparse, stay concise. Return only the description."
+            )},
+            {"role": "user", "content": f"Dish title: {data['title']}\nStaff draft: {data['draft']}"},
+        ],
     }
     api_request = Request(
-        "https://api.openai.com/v1/responses",
+        "https://api.groq.com/openai/v1/chat/completions",
         data=json.dumps(body).encode(),
-        headers={"Authorization": f"Bearer {settings.OPENAI_API_KEY}", "Content-Type": "application/json"},
+        headers={"Authorization": f"Bearer {settings.GROQ_API_KEY}", "Content-Type": "application/json"},
         method="POST",
     )
     try:

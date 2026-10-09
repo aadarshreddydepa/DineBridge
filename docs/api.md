@@ -65,7 +65,7 @@ Order input example:
 
 Owner/manager configuration routes: `PATCH /staff/brands/{id}`, `PATCH /staff/outlets/{id}/branding`, `PATCH /staff/outlets/{id}/ordering`, `POST /staff/brands/{id}/categories`, `POST /staff/brands/{id}/items`, `POST /staff/items/{id}/variants`, `POST /staff/variants/{id}/modifier-groups`, `POST /staff/modifier-groups/{id}/options`, `POST /staff/outlets/{id}/offerings`, `PATCH /staff/outlets/{id}/offerings/{offering_id}`, `POST /staff/outlets/{id}/modifiers`, `POST /staff/outlets/{id}/tables`, and `POST /staff/tables/{id}/rotate-qr`. `POST /staff/outlets/{id}/quick-items` creates an item, Regular variant and outlet offering in one transaction for tenant owners/managers. These routes all have the `/api/v1` prefix. Table creation and QR rotation return a QR URL once; only its hash remains in PostgreSQL.
 
-Menu photo routes for owners/managers: `GET`/`POST /api/v1/staff/items/{id}/images` lists/uploads photos (multipart field `images`; up to 10 photos per dish, 6 MB each), and `DELETE /api/v1/staff/items/{id}/images/{image_id}` removes one. `POST /api/v1/staff/outlets/{id}/description-draft` returns a reviewable AI suggestion when `OPENAI_API_KEY` is configured.
+Menu photo routes for owners/managers: `GET`/`POST /api/v1/staff/items/{id}/images` lists/uploads photos (multipart field `images`; up to 10 photos per dish, 6 MB each), and `DELETE /api/v1/staff/items/{id}/images/{image_id}` removes one. `POST /api/v1/staff/outlets/{id}/description-draft` returns a reviewable AI suggestion when `GROQ_API_KEY` is configured.
 
 ## Remaining work before a restaurant pilot
 

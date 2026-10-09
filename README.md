@@ -26,7 +26,7 @@ For a local demonstration on an **empty** database, run:
 docker compose exec -T api python manage.py seed_local_demo > .local-demo-credentials.json
 ```
 
-The command works only with `DJANGO_DEBUG=1` and returns a generated local owner password and three table QR URLs in the ignored credentials file. Set `ASSET_BASE_URL=https://images.unsplash.com` in local `.env` to display the seed's sample menu photos. The command refuses to run again after the demo tenant exists. For a real tenant, use `bootstrap_tenant` below and enter real menu content in the portal. Owner/manager staff can add categories, dishes, and up to 10 photos per dish (JPEG, PNG or WebP; 6 MB per file). The optional **Polish with AI** button requires `OPENAI_API_KEY` in `.env` or `deploy/aws.env`; the key stays on the API server.
+The command works only with `DJANGO_DEBUG=1` and returns a generated local owner password and three table QR URLs in the ignored credentials file. Set `ASSET_BASE_URL=https://images.unsplash.com` in local `.env` to display the seed's sample menu photos. The command refuses to run again after the demo tenant exists. For a real tenant, use `bootstrap_tenant` below and enter real menu content in the portal. Owner/manager staff can add categories, dishes, and up to 10 photos per dish (JPEG, PNG or WebP; 6 MB per file). The optional **Polish with AI** button requires `GROQ_API_KEY` in `.env` or `deploy/aws.env`; the key stays on the API server.
 
 ## Local database
 

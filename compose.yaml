@@ -38,8 +38,8 @@ services:
       COOKIE_SAMESITE: ${COOKIE_SAMESITE:-Lax}
       ASSET_BASE_URL: ${ASSET_BASE_URL:-}
       MEDIA_ROOT: /app/uploads
-      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
-      OPENAI_MODEL: ${OPENAI_MODEL:-gpt-6-luna}
+      GROQ_API_KEY: ${GROQ_API_KEY:-}
+      GROQ_MODEL: ${GROQ_MODEL:-qwen/qwen3.8-27b}
       POSTGRES_DB: ${POSTGRES_DB:-dinebridge}
       POSTGRES_USER: ${POSTGRES_USER:-dinebridge}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}

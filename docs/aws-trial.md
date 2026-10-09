@@ -113,7 +113,19 @@ sudo docker compose --env-file deploy/aws.env -f compose.aws.yaml exec api \
 
 Sign in at `/staff`. Add a category and dish under **Menu**, enable **Accept new orders** under **Settings**, and add a table under **Tables**. Print or save its QR before closing the dialog. Scan that QR on a phone, place an order, and verify it appears in **Kitchen**. The local demo credentials are not copied to AWS and will not work there.
 
-To enable **Polish with AI**, add an `OPENAI_API_KEY=...` line to the private `deploy/aws.env` on EC2, then recreate the API container. This is optional and uses your own OpenAI API account. Keep the key out of Git.
+To enable **Polish with AI**, create an API key in the Groq console, then enter it directly on EC2 without putting the key in your shell command history:
+
+```sh
+cd ~/dinebridge
+read -rsp 'Groq API key: ' groq_key; printf '\n'
+sed -i '/^GROQ_API_KEY=/d' deploy/aws.env
+printf 'GROQ_API_KEY=%s\n' "$groq_key" >> deploy/aws.env
+unset groq_key
+chmod 600 deploy/aws.env
+sudo docker compose --env-file deploy/aws.env -f compose.aws.yaml up -d --force-recreate api
+```
+
+The key stays in the ignored `deploy/aws.env` file on EC2 and is passed only to the API container. The default model is `qwen/qwen3.8-27b`; set `GROQ_MODEL=` in the same file only if you want to choose a different Groq model. Groq's free plan has rate limits; check the current limits in your Groq console.
 
 ## 6. Operate or stop the trial
 

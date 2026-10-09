@@ -62,5 +62,5 @@ FRONTEND_URL = os.environ.get("FRONTEND_URL", "http://127.0.0.1:5173").rstrip("/
 QR_PUBLIC_BASE_URL = os.environ.get("QR_PUBLIC_BASE_URL", "").rstrip("/")
 ASSET_BASE_URL = os.environ.get("ASSET_BASE_URL", "")
 MEDIA_ROOT = Path(os.environ.get("MEDIA_ROOT", BASE_DIR / "uploads"))
-OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", "")
-OPENAI_MODEL = os.environ.get("OPENAI_MODEL", "gpt-6-luna")
+GROQ_API_KEY = os.environ.get("GROQ_API_KEY", "")
+GROQ_MODEL = os.environ.get("GROQ_MODEL", "qwen/qwen3.8-27b")
