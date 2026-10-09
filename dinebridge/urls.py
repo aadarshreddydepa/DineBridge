@@ -6,6 +6,7 @@ from api import admin_views, views
 urlpatterns = [
     path("healthz", views.health),
     path("api/v1/csrf", views.csrf_cookie),
+    path("api/v1/access", views.customer_access),
     path("api/v1/outlets/<uuid:outlet_id>/config", views.outlet_config),
     path("api/v1/outlets/<uuid:outlet_id>/menu", views.outlet_menu),
     path("q/<str:token>", views.qr_bootstrap),

@@ -2,8 +2,10 @@
 .env.*
 !.env.example
 .venv/
+.uv-cache/
 __pycache__/
 *.py[cod]
 node_modules/
+*.tsbuildinfo
 dist/
 .DS_Store

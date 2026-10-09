@@ -17,6 +17,7 @@ For production, use HTTPS, `DJANGO_DEBUG=0`, matching frontend/API site domains 
 | --- | --- | --- |
 | GET | `/healthz` | Database-backed health check. |
 | GET | `/api/v1/csrf` | Issue CSRF token. |
+| GET | `/api/v1/access` | Read the scanned table label and outlet for this browser capability. |
 | GET | `/api/v1/outlets/{outlet_id}/config` | Effective brand/outlet identity, colors and asset URLs. |
 | GET | `/api/v1/outlets/{outlet_id}/menu` | Available menu with portions, prices, modifiers and serving estimates. |
 | GET | `/q/{token}` | Exchange permanent table QR for browser capability and redirect. |

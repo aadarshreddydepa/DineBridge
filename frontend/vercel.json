@@ -1,0 +1,7 @@
+{
+  "rewrites": [
+    { "source": "/api/v1/:path*", "destination": "/api/proxy?upstream=/api/v1/:path*" },
+    { "source": "/q/:token", "destination": "/api/proxy?upstream=/q/:token" },
+    { "source": "/(.*)", "destination": "/index.html" }
+  ]
+}

@@ -1,6 +1,20 @@
 # DineBridge
 
-The repository contains the PostgreSQL schema and the first Django REST API slice for the restaurant ordering system. The React portals are not built yet.
+The repository contains the PostgreSQL schema, Django REST API, and the mobile-first React customer menu. The staff portal is still to be built.
+
+## Customer frontend
+
+Run the API, then start Vite in another terminal:
+
+```sh
+cd frontend
+npm ci
+npm run dev
+```
+
+Open [http://127.0.0.1:5173/demo?intro=1](http://127.0.0.1:5173/demo?intro=1) for a design preview, including the QR arrival animation. This preview uses sample food and disables checkout. A real table QR opens `/q/{token}`, creates a browser access cookie, and redirects to `/menu?outlet={id}`. The real page loads all restaurant identity and menu content from the API. Vite proxies `/api` and `/q` to the local API on port 8000. Use `127.0.0.1` consistently for both services.
+
+The customer UI includes responsive menu browsing, search, dietary and category filters, item options, persistent basket, idempotent checkout, order polling, and service requests. Its arrival animation runs once per browser session per outlet and respects reduced-motion settings.
 
 ## Local database
 

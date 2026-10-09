@@ -67,6 +67,9 @@ def run():
         csrf = client.get("/api/v1/csrf").json()["csrf_token"]
         qr = client.get(f"/q/{qr_raw}")
         assert qr.status_code == 302 and "db_access" in qr.cookies, qr.content
+        access = client.get("/api/v1/access")
+        assert access.status_code == 200 and access.json()["table_label"] == "T1", access.content
+        assert str(access.json()["outlet_id"]) == str(outlet["id"]), access.content
         assert one("SELECT count(*) AS n FROM dining_visit WHERE table_id = %s", [table["id"]])["n"] == 0
 
         order_body = {"lines": [{"offering_id": str(offering["id"]), "quantity": 2,

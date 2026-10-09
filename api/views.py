@@ -39,6 +39,15 @@ def csrf_cookie(request):
 
 
 @api_view(["GET"])
+def customer_access(request):
+    access = access_from_request(request)
+    table = one("SELECT label FROM dining_table WHERE id = %s AND active", [access["table_id"]])
+    if not table:
+        raise DomainError("ACCESS_EXPIRED", "Scan the table QR code again.", 401)
+    return Response({"outlet_id": access["outlet_id"], "table_label": table["label"]})
+
+
+@api_view(["GET"])
 def outlet_config(request, outlet_id):
     return Response(catalog.outlet_config(outlet_id))
 

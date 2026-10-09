@@ -1,6 +1,7 @@
 import hashlib
 import secrets
 
+from django.conf import settings
 from django.db import transaction
 from psycopg.types.json import Jsonb
 from rest_framework.decorators import api_view
@@ -315,7 +316,8 @@ def create_table(request, outlet_id):
                       [outlet["tenant_id"], outlet_id, serializer.validated_data["label"],
                        hashlib.sha256(raw.encode()).digest()])
         audit(outlet["tenant_id"], outlet_id, user["id"], "table.created", "dining_table", created["id"])
-    return Response({**created, "qr_url": request.build_absolute_uri(f"/q/{raw}")}, status=201)
+    qr_base = settings.QR_PUBLIC_BASE_URL or request.build_absolute_uri("/").rstrip("/")
+    return Response({**created, "qr_url": f"{qr_base}/q/{raw}"}, status=201)
 
 
 @api_view(["POST"])
@@ -333,4 +335,5 @@ def table_rotate_qr(request, table_id):
         execute("UPDATE browser_access SET revoked_at = now() WHERE table_id = %s AND revoked_at IS NULL", [table_id])
         audit(target["tenant_id"], target["outlet_id"], user["id"], "table.qr_rotated", "dining_table", table_id)
         append_event(target["tenant_id"], target["outlet_id"], "table.qr_rotated", {"table_id": str(table_id)})
-    return Response({"table_id": table_id, "qr_url": request.build_absolute_uri(f"/q/{raw}")})
+    qr_base = settings.QR_PUBLIC_BASE_URL or request.build_absolute_uri("/").rstrip("/")
+    return Response({"table_id": table_id, "qr_url": f"{qr_base}/q/{raw}"})
