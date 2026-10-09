@@ -1,6 +1,6 @@
 # DineBridge
 
-Phase 1 provides a local PostgreSQL environment for the restaurant ordering system. The backend, schema migrations, and portal are not in this repository yet.
+Phase 1 provides a local PostgreSQL environment and the initial database schema for the restaurant ordering system. The backend API and portal are not in this repository yet.
 
 ## Local database
 
@@ -24,6 +24,20 @@ Requires Docker Desktop or another Docker engine with Compose.
    ```sh
    docker compose exec db sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB"'
    ```
+
+4. Apply any pending schema migrations:
+
+   ```sh
+   python3 db/migrate.py
+   ```
+
+The migration runner records applied versions in `schema_migration` and skips them on later runs. The current database has migrations `001_initial` and `002_cancellation_reason` applied. To rerun the rollback-only database integrity checks:
+
+```sh
+docker compose exec -T db sh -c 'psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB"' < db/tests/001_integrity.sql
+```
+
+The schema and its key constraints are described in [docs/schema.md](docs/schema.md).
 
 The database listens only on `127.0.0.1` at `POSTGRES_PORT` (default `5432`). On the current development machine, `.env` uses **55432** because another local PostgreSQL server already uses 5432. A future Django backend running on the host can use `postgresql://dinebridge:<password>@127.0.0.1:55432/dinebridge` on this machine. A backend container on the same Compose network will use hostname `db` and port `5432` instead. URL-encode special characters in the password when constructing a connection URL.
 
