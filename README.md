@@ -95,3 +95,5 @@ The database listens only on `127.0.0.1` at `POSTGRES_PORT` (default `5432`). On
 The named Docker volume preserves data across `docker compose down` and container recreation. `docker compose down --volumes` deletes the local database. The PostgreSQL 18 image stores its data under `/var/lib/postgresql/18/docker`, so the volume is mounted at `/var/lib/postgresql`.
 
 Configuration and deployment choices are in [docs/deployment.md](docs/deployment.md).
+
+For a hands-on single-server AWS trial, follow [docs/aws-trial.md](docs/aws-trial.md). It uses `compose.aws.yaml` to run the database, API and built frontend behind HTTPS on one EC2 instance. This is separate from the local Compose setup and does not require Vercel or Render.
