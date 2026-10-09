@@ -11,7 +11,7 @@ from api.auth import require_outlet_role, require_tenant_role
 from api.csrf import require_csrf
 from api.db import all_rows, execute, one
 from api.errors import DomainError
-from api.serializers import (BrandUpdateInput, CategoryInput, ItemInput,
+from api.serializers import (BrandUpdateInput, CategoryInput, ItemInput, QuickItemInput,
                              ModifierGroupInput, ModifierOptionInput, OutletModifierInput,
                              OfferingInput, OfferingUpdateInput,
                              OutletBrandInput, OutletOrderingInput,
@@ -158,6 +158,36 @@ def item_create(request, brand_id):
                        data["description"], data["dietary_type"], Jsonb(data["allergens"])])
         _brand_event(brand, user["id"], "catalogue.item_created", "menu_item", created["id"])
     return Response(created, status=201)
+
+
+@api_view(["POST"])
+@require_csrf
+def quick_item_create(request, outlet_id):
+    outlet = _outlet(outlet_id)
+    user = require_tenant_role(request, outlet["tenant_id"], {"OWNER", "MANAGER"})
+    serializer = QuickItemInput(data=request.data)
+    serializer.is_valid(raise_exception=True)
+    data = serializer.validated_data
+    if not one("SELECT id FROM menu_category WHERE id = %s AND brand_id = %s AND active",
+               [data["category_id"], outlet["brand_id"]]):
+        raise DomainError("INVALID_CATEGORY", "Category does not belong to this outlet's brand.", 422)
+    with transaction.atomic():
+        item = one("""INSERT INTO menu_item(tenant_id, brand_id, category_id, name,
+                                              description, dietary_type, allergens)
+                      VALUES (%s, %s, %s, %s, %s, %s, %s) RETURNING id, name""",
+                   [outlet["tenant_id"], outlet["brand_id"], data["category_id"], data["name"],
+                    data["description"], data["dietary_type"], Jsonb(data["allergens"])])
+        variant = one("""INSERT INTO item_variant(tenant_id, brand_id, item_id, name)
+                         VALUES (%s, %s, %s, 'Regular') RETURNING id""",
+                      [outlet["tenant_id"], outlet["brand_id"], item["id"]])
+        offering = one("""INSERT INTO outlet_offering(tenant_id, brand_id, outlet_id, variant_id,
+                                                      price_paise, estimate_max_minutes)
+                          VALUES (%s, %s, %s, %s, %s, %s) RETURNING id, version""",
+                       [outlet["tenant_id"], outlet["brand_id"], outlet_id, variant["id"],
+                        data["price_paise"], data["estimate_max_minutes"]])
+        _brand_event({"id": outlet["brand_id"], "tenant_id": outlet["tenant_id"]}, user["id"],
+                     "catalogue.item_created", "menu_item", item["id"])
+    return Response({"item": item, "variant": variant, "offering": offering}, status=201)
 
 
 @api_view(["POST"])

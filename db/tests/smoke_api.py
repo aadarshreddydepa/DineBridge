@@ -95,6 +95,17 @@ def run():
         login = post(client, "/api/v1/staff/login",
                      {"email": "smoke@example.invalid", "password": "smoke-password"}, csrf)
         assert login.status_code == 200 and "db_staff" in login.cookies, login.content
+        staff_outlets = client.get("/api/v1/staff/outlets")
+        assert staff_outlets.status_code == 200 and len(staff_outlets.json()["outlets"]) == 1, staff_outlets.content
+        assert staff_outlets.json()["outlets"][0]["can_edit_brand"] is True
+        staff_catalogue = client.get(f"/api/v1/staff/outlets/{outlet['id']}/catalogue")
+        assert staff_catalogue.status_code == 200 and len(staff_catalogue.json()["items"]) == 1, staff_catalogue.content
+        quick_item = post(client, f"/api/v1/staff/outlets/{outlet['id']}/quick-items",
+                          {"category_id": str(category["id"]), "name": "Fresh Lime Soda",
+                           "dietary_type": "VEGAN", "price_paise": 9900,
+                           "estimate_max_minutes": 10}, csrf)
+        assert quick_item.status_code == 201, quick_item.content
+        assert one("SELECT count(*) AS n FROM outlet_offering WHERE outlet_id = %s", [outlet["id"]])["n"] == 2
         new_table = post(client, f"/api/v1/staff/outlets/{outlet['id']}/tables", {"label": "T2"}, csrf)
         assert new_table.status_code == 201 and "/q/" in new_table.json()["qr_url"], new_table.content
         group = post(client, f"/api/v1/staff/variants/{variant['id']}/modifier-groups",

@@ -91,6 +91,7 @@ export interface Order {
   id: string
   display_ref: string
   placed_at?: string
+  seen_at?: string | null
   subtotal_paise: number
   lines: OrderLine[]
 }

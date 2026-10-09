@@ -87,6 +87,11 @@ class ItemInput(serializers.Serializer):
     allergens = serializers.ListField(child=serializers.CharField(max_length=100), required=False, default=list)
 
 
+class QuickItemInput(ItemInput):
+    price_paise = serializers.IntegerField(min_value=0)
+    estimate_max_minutes = serializers.IntegerField(min_value=0, required=False, default=25)
+
+
 class VariantInput(serializers.Serializer):
     name = serializers.CharField(max_length=100)
     display_order = serializers.IntegerField(required=False, default=0)

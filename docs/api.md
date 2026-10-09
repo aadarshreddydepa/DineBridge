@@ -49,6 +49,8 @@ Order input example:
 | POST | `/api/v1/staff/logout` | Clear staff cookie. |
 | GET | `/api/v1/staff/me` | Active memberships. |
 | GET | `/api/v1/staff/outlets/{outlet_id}/tables` | Active visits, unseen counts, requests and event cursor. |
+| GET | `/api/v1/staff/outlets` | Active outlets and effective roles for the signed-in user. |
+| GET | `/api/v1/staff/outlets/{outlet_id}/catalogue` | Categories, items, variants and all outlet offerings for menu editing. |
 | GET | `/api/v1/staff/outlets/{outlet_id}/queue` | Persistent outstanding kitchen lines. |
 | GET | `/api/v1/staff/visits/{visit_id}/orders` | Full visit orders and reconciliation summary. |
 | GET | `/api/v1/staff/outlets/{outlet_id}/service-requests` | Open service requests. |
@@ -61,8 +63,8 @@ Order input example:
 | GET | `/api/v1/staff/outlets/{outlet_id}/events?after=ID` | Seven-day JSON event replay. |
 | GET | `/api/v1/staff/outlets/{outlet_id}/events/stream` | 30-second SSE stream with event IDs and heartbeats; reconnect with `Last-Event-ID`. |
 
-Owner/manager configuration routes: `PATCH /staff/brands/{id}`, `PATCH /staff/outlets/{id}/branding`, `PATCH /staff/outlets/{id}/ordering`, `POST /staff/brands/{id}/categories`, `POST /staff/brands/{id}/items`, `POST /staff/items/{id}/variants`, `POST /staff/variants/{id}/modifier-groups`, `POST /staff/modifier-groups/{id}/options`, `POST /staff/outlets/{id}/offerings`, `PATCH /staff/outlets/{id}/offerings/{offering_id}`, `POST /staff/outlets/{id}/modifiers`, `POST /staff/outlets/{id}/tables`, and `POST /staff/tables/{id}/rotate-qr`. These routes all have the `/api/v1` prefix. Table creation and QR rotation return a QR URL once; only its hash remains in PostgreSQL.
+Owner/manager configuration routes: `PATCH /staff/brands/{id}`, `PATCH /staff/outlets/{id}/branding`, `PATCH /staff/outlets/{id}/ordering`, `POST /staff/brands/{id}/categories`, `POST /staff/brands/{id}/items`, `POST /staff/items/{id}/variants`, `POST /staff/variants/{id}/modifier-groups`, `POST /staff/modifier-groups/{id}/options`, `POST /staff/outlets/{id}/offerings`, `PATCH /staff/outlets/{id}/offerings/{offering_id}`, `POST /staff/outlets/{id}/modifiers`, `POST /staff/outlets/{id}/tables`, and `POST /staff/tables/{id}/rotate-qr`. `POST /staff/outlets/{id}/quick-items` creates an item, Regular variant and outlet offering in one transaction for tenant owners/managers. These routes all have the `/api/v1` prefix. Table creation and QR rotation return a QR URL once; only its hash remains in PostgreSQL.
 
 ## Remaining work before a restaurant pilot
 
-The portal is not built. The API still needs customer order-event scoping, full catalogue edit/archive routes, media upload and processing, a durable outbox delivery worker, request throttling, broader PostgreSQL concurrency/load tests, and deployment monitoring/backups. The local smoke flow and a real two-phone first-order race test pass; they are not a live-service reliability gate. The existing POS remains authoritative for payment and invoices.
+The staff portal now covers core restaurant operations. Before a real pilot, the API still needs customer order-event scoping, full catalogue edit/archive routes, media upload and processing, a durable outbox delivery worker, request throttling, broader PostgreSQL concurrency/load tests, and deployment monitoring/backups. The portal currently polls every 10 seconds; the event stream is available but not integrated into the UI. The local smoke flow and a real two-phone first-order race test pass; they are not a live-service reliability gate. The existing POS remains authoritative for payment and invoices.

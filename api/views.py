@@ -157,6 +157,31 @@ def staff_me(request):
     return Response({**user, "memberships": memberships})
 
 
+@api_view(["GET"])
+def staff_outlets(request):
+    user = staff_from_request(request)
+    outlets = all_rows(
+        """SELECT o.id, o.tenant_id, o.brand_id, o.name, o.slug,
+                  o.ordering_enabled, b.display_name AS brand_name,
+                  EXISTS (SELECT 1 FROM staff_membership bm
+                          WHERE bm.user_id = %s AND bm.active AND bm.tenant_id = o.tenant_id
+                            AND bm.outlet_id IS NULL AND bm.role IN ('OWNER', 'MANAGER')) AS can_edit_brand,
+                  ARRAY(SELECT DISTINCT sm.role FROM staff_membership sm
+                        WHERE sm.user_id = %s AND sm.active AND sm.tenant_id = o.tenant_id
+                          AND (sm.outlet_id IS NULL OR sm.outlet_id = o.id)
+                        ORDER BY sm.role) AS roles
+           FROM outlet o JOIN brand b ON b.id = o.brand_id
+           JOIN tenant t ON t.id = o.tenant_id
+           WHERE o.active AND b.active AND t.active
+             AND EXISTS (SELECT 1 FROM staff_membership sm
+                         WHERE sm.user_id = %s AND sm.active AND sm.tenant_id = o.tenant_id
+                           AND (sm.outlet_id IS NULL OR sm.outlet_id = o.id))
+           ORDER BY b.display_name, o.name""",
+        [user["id"], user["id"], user["id"]],
+    )
+    return Response({"outlets": outlets})
+
+
 @api_view(["GET", "POST"])
 @require_csrf
 def staff_tables(request, outlet_id):
@@ -164,6 +189,28 @@ def staff_tables(request, outlet_id):
         return admin_views.create_table(request, outlet_id)
     require_outlet_role(request, outlet_id, {"OWNER", "MANAGER", "CASHIER", "KITCHEN", "WAITER"})
     return Response(staff.tables_snapshot(outlet_id))
+
+
+@api_view(["GET"])
+def staff_catalogue(request, outlet_id):
+    require_outlet_role(request, outlet_id, {"OWNER", "MANAGER"})
+    rows = all_rows(
+        """SELECT c.id AS category_id, c.name AS category_name, c.display_order AS category_order,
+                  mi.id AS item_id, mi.name AS item_name, mi.description, mi.dietary_type,
+                  iv.id AS variant_id, iv.name AS variant_name,
+                  oo.id AS offering_id, oo.price_paise, oo.version,
+                  oo.available, oo.active AS offering_active,
+                  oo.estimate_min_minutes, oo.estimate_max_minutes
+           FROM outlet o
+           JOIN menu_category c ON c.brand_id = o.brand_id AND c.active
+           LEFT JOIN menu_item mi ON mi.category_id = c.id AND mi.active
+           LEFT JOIN item_variant iv ON iv.item_id = mi.id AND iv.active
+           LEFT JOIN outlet_offering oo ON oo.variant_id = iv.id AND oo.outlet_id = o.id
+           WHERE o.id = %s
+           ORDER BY c.display_order, c.name, mi.name, iv.display_order, iv.name""",
+        [outlet_id],
+    )
+    return Response({"outlet_id": outlet_id, "items": rows})
 
 
 @api_view(["GET"])

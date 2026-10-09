@@ -8,7 +8,7 @@ Assumption: “Resin” means **Render**. This document describes a development 
 | --- | --- | --- | --- |
 | PostgreSQL | Compose `db` service | External PostgreSQL provider such as Neon Free | Managed PostgreSQL with backups and tested restores |
 | Django API | Compose `api` service | Render Free web service using this repository's Dockerfile | Always-on service, monitoring, deployment rollback |
-| React customer menu | Vite on `127.0.0.1:5173` | Vercel Hobby for personal/noncommercial demonstration | A plan that permits commercial use, or another suitable static host |
+| React customer menu and staff portal | Vite on `127.0.0.1:5173` | Vercel Hobby for personal/noncommercial demonstration | A plan that permits commercial use, or another suitable static host |
 | Menu/brand images | Local development storage | External object storage | Durable object storage and CDN |
 | Event worker | Future local process/container | No durable free Render worker assumed | Dedicated worker or equivalent reliable process |
 

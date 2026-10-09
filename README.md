@@ -1,6 +1,6 @@
 # DineBridge
 
-The repository contains the PostgreSQL schema, Django REST API, and the mobile-first React customer menu. The staff portal is still to be built.
+The repository contains the PostgreSQL schema, Django REST API, mobile-first React customer menu, and a staff portal for restaurant operations.
 
 ## Customer frontend
 
@@ -15,6 +15,18 @@ npm run dev
 Open [http://127.0.0.1:5173/demo?intro=1](http://127.0.0.1:5173/demo?intro=1) for a design preview, including the QR arrival animation. This preview uses sample food and disables checkout. A real table QR opens `/q/{token}`, creates a browser access cookie, and redirects to `/menu?outlet={id}`. The real page loads all restaurant identity and menu content from the API. Vite proxies `/api` and `/q` to the local API on port 8000. Use `127.0.0.1` consistently for both services.
 
 The customer UI includes responsive menu browsing, search, dietary and category filters, item options, persistent basket, idempotent checkout, order polling, and service requests. Its arrival animation runs once per browser session per outlet and respects reduced-motion settings.
+
+## Staff portal
+
+Open [http://127.0.0.1:5173/staff](http://127.0.0.1:5173/staff) after starting Vite. Staff can sign in, select an assigned outlet, view active tables and kitchen work, acknowledge orders, progress dishes, resolve service requests, manage checkout and external POS billing, create and print table QRs, edit menu availability and prices, and control outlet branding and ordering. Tenant owners and managers can also add categories and dishes. The portal refreshes operational data every 10 seconds.
+
+For a local demonstration on an **empty** database, run:
+
+```sh
+docker compose exec -T api python manage.py seed_local_demo > .local-demo-credentials.json
+```
+
+The command works only with `DJANGO_DEBUG=1` and returns a generated local owner password and three table QR URLs in the ignored credentials file. Set `ASSET_BASE_URL=https://images.unsplash.com` in local `.env` to display the seed's sample menu photos. The command refuses to run again after the demo tenant exists. For a real tenant, use `bootstrap_tenant` below and enter real menu content in the portal.
 
 ## Local database
 
